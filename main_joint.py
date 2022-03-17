@@ -451,7 +451,7 @@ def main():
                 opt.save_folder, 'ckpt_epoch_{epoch}.pth'.format(epoch=epoch))
             save_model(model, optimizer_model, opt, epoch, save_file)
 
-    print('Best classifier accuracy: {:.2f}'.formatt(best_acc))
+    print('Best classifier accuracy: {:.2f}'.format(best_acc))
     # save the last model
     save_file = os.path.join(
         opt.save_folder, 'last.pth')
