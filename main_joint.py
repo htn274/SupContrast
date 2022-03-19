@@ -6,10 +6,11 @@ import argparse
 import time
 import math
 
-import tensorboard_logger as tb_logger
+#import tensorboard_logger as tb_logger
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
 
 from util import TwoCropTransform, AverageMeter
@@ -162,25 +163,32 @@ def set_loader(opt):
         raise ValueError('dataset not supported: {}'.format(opt.dataset))
     normalize = transforms.Normalize(mean=mean, std=std)
 
+    #train_transform = transforms.Compose([
+    #    transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
+    #    transforms.RandomHorizontalFlip(),
+    #    transforms.RandomApply([
+    #        transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+    #    ], p=0.8),
+    #    transforms.RandomGrayscale(p=0.2),
+    #    transforms.ToTensor(),
+    #    normalize,
+    #])
+    
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=opt.size, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
         transforms.ToTensor(),
         normalize,
     ])
-    
     val_transform = transforms.Compose([
             transforms.ToTensor(),
             normalize
     ])
     
     if opt.dataset == 'cifar10':
+        #train_dataset = datasets.CIFAR10(root=opt.data_folder,
+        #                                 transform=TwoCropTransform(train_transform),
+        #                                 download=True)
         train_dataset = datasets.CIFAR10(root=opt.data_folder,
-                                         transform=TwoCropTransform(train_transform),
+                                         transform=(train_transform),
                                          download=True)
         val_dataset = datasets.CIFAR10(root=opt.data_folder, transform=val_transform, train=False)
     elif opt.dataset == 'cifar100':
@@ -239,7 +247,7 @@ def train_model(train_loader, model, criterion, optimizer, epoch, opt):
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        images = torch.cat([images[0], images[1]], dim=0)
+        # images = torch.cat([images[0], images[1]], dim=0)
         if torch.cuda.is_available():
             images = images.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -250,8 +258,9 @@ def train_model(train_loader, model, criterion, optimizer, epoch, opt):
 
         # compute loss
         features = model(images)
-        f1, f2 = torch.split(features, [bsz, bsz], dim=0)
-        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        # f1, f2 = torch.split(features, [bsz, bsz], dim=0)
+        features = features.unsqueeze(1)
+        # features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         if opt.method == 'SupCon':
             loss = criterion(features, labels)
         elif opt.method == 'SimCLR':
@@ -298,7 +307,7 @@ def train_classifier(train_loader, model, classifier, criterion, optimizer, epoc
     for idx, (images, labels) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        images = images[0]
+        #images = images[0]
         images = images.cuda(non_blocking=True)
         labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
@@ -417,7 +426,8 @@ def main():
     optimizer_classifier = set_optimizer(opt, classifier, '_classifier')
 
     # tensorboard
-    logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
+    # logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
+    logger = SummaryWriter(log_dir=opt.tb_folder, flush_secs=2)
 
     train_classifier_freq = 2
     # training routine
@@ -430,18 +440,30 @@ def main():
         # train classifier
         if epoch % train_classifier_freq == 0:
             adjust_learning_rate(opt, optimizer_classifier, epoch // train_classifier_freq, '_classifier')
-            ce_loss, acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt)
-            print('Classifier accuracy: {:.2f}'.format(acc))
+            train_loss, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt)
+            print('Classifier accuracy: {:.2f}'.format(train_acc))
             # eval for 1 epoch
-            loss, val_acc = validate(val_loader, model, classifier, criterion_classifier, opt)
+            val_loss, val_acc = validate(val_loader, model, classifier, criterion_classifier, opt)
             if val_acc > best_acc:
                 best_acc = val_acc
+                
+            loss_dict = {
+                'train': train_loss,
+                'val': val_loss
+            }
+            acc_dict = {
+                'train': train_acc,
+                'val': val_acc
+            }
+            logger.add_scalars('Classifier loss: ', loss_dict, epoch) 
+            logger.add_scalars('Classifier acc: ', acc_dict, epoch) 
 
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
         # tensorboard logger
-        logger.log_value('supcon loss', sc_loss, epoch)
+        logger.add_scalar('SupCon Loss', sc_loss, epoch)
+        # logger.log_value('supcon_loss', sc_loss, epoch)
         # logger.log_value('cross-entropy loss', ce_loss, epoch)
         # logger.log_value('learning_rate', optimizer_model.param_groups[0]['lr'], epoch)
         
