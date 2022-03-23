@@ -11,11 +11,6 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 
-from util import AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate, accuracy
-from util import set_optimizer, save_model
-from networks.resnet_big import SupCEResNet
-
 try:
     import apex
     from apex import amp, optimizers
@@ -304,14 +299,16 @@ def main():
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 
         # tensorboard logger
-        logger.log_value('train_loss', loss, epoch)
-        logger.log_value('train_acc', train_acc, epoch)
-        logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
+        print('Train: Loss: {}, Acc: {}'.format(loss, train_acc))
+        # logger.log_value('train_loss', loss, epoch)
+        # logger.log_value('train_acc', train_acc, epoch)
+        # logger.log_value('learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
         # evaluation
         loss, val_acc = validate(val_loader, model, criterion, opt)
-        logger.log_value('val_loss', loss, epoch)
-        logger.log_value('val_acc', val_acc, epoch)
+        print('Validation: Loss: {}, Acc: {}'.format(loss, val_acc))
+        # logger.log_value('val_loss', loss, epoch)
+        # logger.log_value('val_acc', val_acc, epoch)
 
         if val_acc > best_acc:
             best_acc = val_acc
@@ -330,4 +327,14 @@ def main():
 
 
 if __name__ == '__main__':
+    from util import AverageMeter
+    from util import adjust_learning_rate, warmup_learning_rate, accuracy
+    from util import set_optimizer, save_model
+    from networks.resnet_big import SupCEResNet
     main()
+else:
+    from SupContrast.util import AverageMeter
+    from SupContrast.util import adjust_learning_rate, warmup_learning_rate, accuracy
+    from SupContrast.util import set_optimizer, save_model
+    from SupContrast.networks.resnet_big import SupCEResNet   
+    
