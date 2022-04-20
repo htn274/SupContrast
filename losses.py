@@ -54,7 +54,9 @@ class SupConLoss(nn.Module):
         else:
             mask = mask.float().to(device)
 
+        # contrast count is the number of augmented views
         contrast_count = features.shape[1]
+        # contrast feature: the concatenation of all views
         contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
         if self.contrast_mode == 'one':
             anchor_feature = features[:, 0]
@@ -85,11 +87,11 @@ class SupConLoss(nn.Module):
         mask = mask * logits_mask
 
         # compute log_prob
-        exp_logits = torch.exp(logits) * logits_mask
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
+        exp_logits = torch.exp(logits) * logits_mask # this is the numerator -> positive
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True)) # this is the denom -> negative
 
         # compute mean of log-likelihood over positive
-        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-12)
+        mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
 
         # loss
         loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
